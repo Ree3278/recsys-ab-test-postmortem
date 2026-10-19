@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import charts
 
-REPO_URL = ""  # set to your GitHub repo URL to show a source link
+REPO_URL = "https://github.com/Ree3278/recsys-ab-test-postmortem"  # set to your GitHub repo URL to show a source link
 
 INDEX = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
