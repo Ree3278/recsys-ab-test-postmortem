@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recommender A/B Test Post-mortem (Simulated)</title>
+<meta name="description" content="Simulated A/B test of a recommendation engine: novelty effect, heterogeneity, long-tail concentration and SRM diagnostics.">
+<style>
+  :root { color-scheme: light; --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781; --rule:#e1e0d9; --accent:#2a78d6; }
+  @media (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"])) {
+    color-scheme: dark; --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781; --rule:#2c2c2a; --accent:#3987e5; } }
+  :root[data-theme="dark"] { color-scheme: dark; --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781; --rule:#2c2c2a; --accent:#3987e5; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--page); color:var(--ink); font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 0 16px 64px; }
+  header.top { display:flex; justify-content:space-between; align-items:center; padding:16px 0; font-size:13px; color:var(--ink2); }
+  button { font:inherit; font-size:13px; color:var(--ink2); background:var(--surface); border:1px solid var(--rule); border-radius:999px; padding:4px 12px; cursor:pointer; }
+  button:focus-visible, a:focus-visible, summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  h1 { font-size: clamp(26px, 5vw, 38px); line-height:1.15; margin: 24px 0 12px; font-weight:650; letter-spacing:-.01em; max-width: 22ch; }
+  h2 { font-size: 22px; margin: 56px 0 4px; font-weight:600; }
+  h2 .n { color: var(--muted); font-weight:500; margin-right:8px; }
+  p { max-width: 68ch; margin: 8px 0; }
+  .lead { font-size: 18px; color: var(--ink2); max-width: 60ch; }
+  .banner { border:1px solid var(--rule); background:var(--surface); border-radius:10px; padding:12px 16px; margin:20px 0; font-size:14px; color:var(--ink2); }
+  .banner b { color: var(--ink); }
+  .tiles { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin: 24px 0; }
+  .tile { background:var(--surface); border:1px solid var(--rule); border-radius:12px; padding:16px; }
+  .tile .k { font-size:13px; color:var(--ink2); }
+  .tile .v { font-size: 30px; font-weight:600; line-height:1.2; margin:4px 0; }
+  .tile .d { font-size:13px; color:var(--muted); }
+  iframe { width:100%; border:0; height:600px; display:block; margin-top:12px; background:transparent; color-scheme: normal; }
+  .why { color:var(--ink2); }
+  table { border-collapse: collapse; width:100%; font-size:14px; margin:12px 0; font-variant-numeric: tabular-nums; }
+  th, td { text-align:right; padding:6px 10px; border-bottom:1px solid var(--rule); }
+  th:first-child, td:first-child { text-align:left; }
+  .tw { overflow-x:auto; }
+  ul { max-width: 68ch; padding-left: 20px; }
+  li { margin: 6px 0; }
+  a { color: var(--accent); }
+  footer { margin-top: 56px; padding-top: 16px; border-top:1px solid var(--rule); color:var(--muted); font-size:13px; }
+</style></head>
+<body><main>
+<header class="top"><span>Recommender A/B test · simulated</span><button id="theme" type="button" aria-label="Change color theme">Theme: auto</button></header>
+
+<h1>Did the new recommender really win?</h1>
+<p class="lead">A simulated A/B test of a new recommendation engine. The headline metric improves, but the story changes once you separate novelty from steady state, split by user group, and look at what happens to long-tail items.</p>
+<div class="banner"><b>All data on this page is synthetic.</b> Effect sizes (novelty decay, subgroup lifts, exposure concentration) are parameters I set in a simulator.
+The point is the analysis pipeline: it should recover the planted effects and raise the planted warnings. No claim is made about any real product.</div>
+
+<div class="tiles">
+  <div class="tile"><div class="k">Headline: 14-day GMV per user</div><div class="v">+7.5%</div><div class="d">95% CI [+5.8%, +9.1%], CUPED-adjusted</div></div>
+  <div class="tile"><div class="k">Days 8–14 only</div><div class="v">+2.7%</div><div class="d">95% CI [+0.6%, +4.7%]; days 1–3 were +17.7%</div></div>
+  <div class="tile"><div class="k">Impression Gini</div><div class="v">0.68 → 0.81</div><div class="d">Top 1% of SKUs: 34% → 52% of impressions</div></div>
+</div>
+
+<h2><span class="n">1</span>Is the lift real, or novelty?</h2>
+<p class="why">The 14-day average is +7.5%, but the first three days run at +17.7% while days 8–14 run at +2.7%. A user-level cumulative view keeps early days in the average, so it looks healthy long after the effect has faded.</p>
+<iframe src="charts/novelty.html" title="Novelty effect chart" loading="lazy"></iframe>
+
+<h2><span class="n">2</span>Who is helped and who is hurt?</h2>
+<p class="why">The overall number is an average of opposing effects: new users -4.6% (BH-adjusted p = 0.023) versus high-activity returning users +15.1%. Subgroup results are exploratory and corrected for multiple comparisons.</p>
+<iframe src="charts/heterogeneity.html" title="Heterogeneity forest plot" loading="lazy"></iframe>
+
+<h2><span class="n">3</span>What happens to the long tail?</h2>
+<p class="why">Treatment concentrates impressions on already-popular items: Gini 0.68 → 0.81. Short-term click metrics would not show this; a guardrail metric does.</p>
+<iframe src="charts/long_tail.html" title="Lorenz curve chart" loading="lazy"></iframe>
+
+<h2><span class="n">4</span>Can the experiment be trusted at all?</h2>
+<p class="why">Before reading any result, check the split. Here an injected logging loss (p = 2.2e-12) is flagged and traced to android; the clean run passes (p = 0.31).</p>
+<iframe src="charts/srm.html" title="Sample ratio mismatch chart" loading="lazy"></iframe>
+
+<h2>Method</h2>
+<ul>
+  <li><b>Estimand.</b> Relative lift in 14-day GMV per user, treatment vs control, on the pre-registered 14-day window. Daily and cumulative views are diagnostics only: repeated looks inflate false positives.</li>
+  <li><b>Test.</b> Two-sided Welch t-test; relative-lift CI by the delta method.</li>
+  <li><b>CUPED.</b> Pre-period GMV as covariate; variance reduced by 27% overall. New users have no history, so it does nothing for them.</li>
+  <li><b>SRM.</b> Chi-square goodness of fit to the intended 50/50 split, alert at p &lt; 0.001, then sliced by device.</li>
+  <li><b>Subgroups.</b> Exploratory; Benjamini–Hochberg adjusted across 9 tests.</li>
+  <li><b>Power.</b> Planned before the experiment from baseline variance (below), not computed after the fact.</li>
+</ul>
+<p>Sample size per arm to detect a relative GMV lift (80% power, α = 0.05, baseline mean 41.29, SD 84.82):</p>
+<div class="tw"><table><thead><tr><th>Target lift</th><th>Per arm, raw</th><th>Per arm, with CUPED</th></tr></thead><tbody><tr><td>1%</td><td>662,290</td><td>483,012</td></tr><tr><td>2%</td><td>165,573</td><td>120,753</td></tr><tr><td>3%</td><td>73,588</td><td>53,668</td></tr><tr><td>5%</td><td>26,492</td><td>19,321</td></tr><tr><td>10%</td><td>6,623</td><td>4,831</td></tr></tbody></table></div>
+
+<h2>Does the pipeline work?</h2>
+<p>Repeated simulation (1000 runs of 30,000 users). With no planted effect, the false-positive rate is 5.9% (raw) and 5.5% (CUPED), and SRM alerts fire in 0.2% of runs. With planted effects, 95% intervals cover the known true lift about 95% of the time:</p><div class='tw'><table><thead><tr><th>Group</th><th>True lift</th><th>Coverage, raw</th><th>Coverage, CUPED</th><th>CUPED CI width vs raw</th></tr></thead><tbody><tr><td>overall</td><td>+7.4%</td><td>93.8%</td><td>94.4%</td><td>0.85</td></tr><tr><td>ret high</td><td>+13.0%</td><td>94.7%</td><td>95.0%</td><td>0.81</td></tr><tr><td>new</td><td>-7.0%</td><td>94.2%</td><td>94.2%</td><td>1.00</td></tr></tbody></table></div>
+
+<h2>Limitations</h2>
+<ul>
+  <li>Simulated users are independent; there is no interference between users, which real marketplaces violate (the cannibalization concern from the brief).</li>
+  <li>The recommender is not built: a click model stands in for it, so no claim is made about LLM or vector retrieval quality.</li>
+  <li>Planted effects are my assumptions. Recovering them shows the method works, not that real recommenders behave this way.</li>
+  <li>The SRM scenario is localized by device only; no funnel-stage decomposition.</li>
+</ul>
+
+<footer>Python · pandas · SciPy · statsmodels · Plotly. Built with uv.</footer>
+</main>
+<script>
+(function () {
+  var modes = ["auto", "light", "dark"], i = 0, btn = document.getElementById("theme");
+  var frames = Array.prototype.slice.call(document.querySelectorAll("iframe"));
+  try { var s = localStorage.getItem("ab-theme"); if (s && modes.indexOf(s) >= 0) i = modes.indexOf(s); } catch (e) {}
+  function push() {
+    var m = modes[i];
+    if (m === "auto") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", m);
+    btn.textContent = "Theme: " + m;
+    frames.forEach(function (f) { try { f.contentWindow.postMessage({abTheme: m}, "*"); } catch (e) {} });
+  }
+  btn.addEventListener("click", function () {
+    i = (i + 1) % 3;
+    try { localStorage.setItem("ab-theme", modes[i]); } catch (e) {}
+    push();
+  });
+  frames.forEach(function (f) { f.addEventListener("load", push); });
+  window.addEventListener("message", function (e) {
+    if (!e.data || !e.data.abHeight) return;
+    frames.forEach(function (f) { if (f.contentWindow === e.source) f.style.height = (e.data.abHeight + 4) + "px"; });
+  });
+  push();
+})();
+</script>
+</body></html>

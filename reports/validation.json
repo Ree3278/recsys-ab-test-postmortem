@@ -1,0 +1,29 @@
+{
+  "n_reps": 1000,
+  "n_users": 30000,
+  "aa": {
+    "fpr_raw": 0.059,
+    "fpr_cuped": 0.055,
+    "srm_alert_rate": 0.002
+  },
+  "coverage": {
+    "overall": {
+      "true_lift": 0.07368497085184023,
+      "raw": 0.938,
+      "cuped": 0.944,
+      "cuped_ci_width_ratio": 0.8544434480402401
+    },
+    "ret_high": {
+      "true_lift": 0.12992218966574615,
+      "raw": 0.947,
+      "cuped": 0.95,
+      "cuped_ci_width_ratio": 0.8113355495937269
+    },
+    "new": {
+      "true_lift": -0.07007781033425385,
+      "raw": 0.942,
+      "cuped": 0.942,
+      "cuped_ci_width_ratio": 1.0
+    }
+  }
+}
